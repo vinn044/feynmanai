@@ -32,12 +32,13 @@ SYSTEM_PROMPT = {
 OPENING_PROMPT = {
     "role": "assistant",
     "content": (
-        "I will act as an examiner using the Feynman Technique.\n\n"
-        "Your task is to demonstrate real understanding, not memorized definitions. "
-        "Explain ideas simply and precisely, as if teaching a beginner.\n\n"
-        "I will challenge vague statements, probe assumptions, and interrupt unclear reasoning. "
-        "If something you say is factually wrong, I will correct it briefly and move on.\n\n"
-        "Choose ONE specific concept you believe you understand well and begin explaining it."
+        "Hello, and welcome.\n\n"
+        "We’ll be using the Feynman Technique for this exercise.\n\n"
+        "The goal is to focus on real understanding, not memorized definitions. "
+        "Explain ideas clearly and simply, as if you were teaching someone new to the topic.\n\n"
+        "Along the way, I may pause to ask for clarification, question assumptions, and point out gaps in reasoning. "
+        "If something is factually incorrect, I’ll correct it briefly so we can keep moving forward.\n\n"
+        "Choose ONE concept you feel comfortable with and begin explaining it."
     )
 }
 
