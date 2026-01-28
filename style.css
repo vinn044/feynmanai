@@ -1,8 +1,13 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #0f1117;
-  color: #eaeaea;
+  background: #1e1f22;
+  color: #dcddde;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               sans-serif;
 }
 
 #app {
@@ -11,42 +16,67 @@ body {
   height: 100vh;
 }
 
+/* IMPORTANT: flex column so align-self works */
 #chat {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
-.user {
-  text-align: right;
-  margin: 8px 0;
-  color: #7dd3fc;
+.message {
+  max-width: 75%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
-.ai {
-  text-align: left;
-  margin: 8px 0;
-  color: #a7f3d0;
+.message.ai {
+  background: #2b2d31;
+  align-self: flex-start;
+}
+
+.message.user {
+  background: #3a3c43;
+  align-self: flex-end;
 }
 
 #input-bar {
   display: flex;
-  padding: 10px;
-  border-top: 1px solid #222;
+  gap: 8px;
+  padding: 12px;
+  background: #1e1f22;
+  border-top: 1px solid #2b2d31;
 }
 
 #input {
   flex: 1;
-  padding: 8px;
-  font-size: 16px;
-  background: #111;
-  color: white;
+  padding: 10px 12px;
+  border-radius: 6px;
   border: none;
   outline: none;
+  background: #2b2d31;
+  color: #dcddde;
+  font-size: 14px;
+}
+
+#input::placeholder {
+  color: #8e9297;
 }
 
 #send {
-  margin-left: 10px;
-  padding: 8px 16px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #5865f2; /* Discord blurple */
+  color: white;
+  font-weight: 600;
   cursor: pointer;
+}
+
+#send:hover {
+  background: #4752c4;
 }
