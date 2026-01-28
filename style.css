@@ -1,0 +1,52 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0f1117;
+  color: #eaeaea;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#chat {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.user {
+  text-align: right;
+  margin: 8px 0;
+  color: #7dd3fc;
+}
+
+.ai {
+  text-align: left;
+  margin: 8px 0;
+  color: #a7f3d0;
+}
+
+#input-bar {
+  display: flex;
+  padding: 10px;
+  border-top: 1px solid #222;
+}
+
+#input {
+  flex: 1;
+  padding: 8px;
+  font-size: 16px;
+  background: #111;
+  color: white;
+  border: none;
+  outline: none;
+}
+
+#send {
+  margin-left: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+}

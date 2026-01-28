@@ -1,30 +1,39 @@
-const { app, BrowserWindow } = require('electron/main')
-const path = require('node:path')
+const { app, BrowserWindow, ipcMain } = require("electron");
+const { spawn } = require("child_process");
+const path = require("path");
 
-const createWindow = () => {
+let py;
+
+function createWindow() {
   const win = new BrowserWindow({
-    width: 800,
+    width: 900,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
-    }
-  })
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
 
-  win.loadFile('index.html')
+  win.loadFile("index.html");
 }
 
 app.whenReady().then(() => {
-  createWindow()
+  py = spawn("python", ["engine.py"], {
+  env: {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+  },
+});
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
-  })
-})
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+  createWindow();
+});
+
+ipcMain.handle("chat", (_, message) => {
+  return new Promise((resolve) => {
+    py.stdin.write(message + "\n");
+    py.stdout.once("data", (data) => {
+  resolve(data.toString("utf8").trim());
+});
+
+  });
+});

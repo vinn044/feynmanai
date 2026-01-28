@@ -1,4 +1,8 @@
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stdin.reconfigure(encoding="utf-8")
 import os
+import sys
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -66,7 +70,6 @@ def start_session():
 
 
 def step(history, user_input):
-    """One examiner turn."""
     history.append({"role": "user", "content": user_input})
 
     response = client.responses.create(
@@ -93,3 +96,29 @@ def evaluate(history):
     )
 
     return response.output_text
+
+
+# Electron adapter (stdin/stdout loop)
+
+if __name__ == "__main__":
+    history = start_session()
+
+    # Send opening message immediately
+    print(history[-1]["content"])
+    sys.stdout.flush()
+
+    for line in sys.stdin:
+        user_input = line.strip()
+
+        if not user_input:
+            continue
+
+        if should_stop(user_input):
+            evaluation = evaluate(history)
+            print(evaluation)
+            sys.stdout.flush()
+            break
+
+        reply, history = step(history, user_input)
+        print(reply)
+        sys.stdout.flush()
