@@ -1,5 +1,19 @@
+# Python
 .env
 __pycache__/
 *.pyc
 
+# Node / Electron
+node_modules/
 out/
+dist/
+
+# Electron / build artifacts
+*.exe
+*.asar
+*.nupkg
+*.dll
+
+# OS junk
+.DS_Store
+Thumbs.db
