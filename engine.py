@@ -1,9 +1,13 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stdin.reconfigure(encoding="utf-8")
+
 import os
-import sys
+import json
 from openai import OpenAI
+from io import BytesIO
+import numpy as np
+import wave
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -14,111 +18,208 @@ SYSTEM_PROMPT = {
     "content": (
         "You are an experienced tutor conducting an oral examination using the Feynman Technique. "
         "You already understand the subject matter. Your goal is to test whether the user understands it.\n\n"
-
-        "Rules of interaction:\n"
-        "- Do not lecture or teach upfront.\n"
-        "- Ask one clear, pointed question at a time.\n"
-        "- If the user gives a clearly incorrect statement, correct it immediately and briefly, then continue.\n"
-        "- If the user gives a vague but plausibly correct answer (e.g. 'it's just a hash map'), "
-        "respond with skeptical probing such as 'Hmm… okay. What do you mean by that?'\n"
-        "- Do not ask more than one clarification question in a row about the same term.\n"
-        "- After one clarification, move on to deeper or applied questions "
-        "(tradeoffs, edge cases, comparisons, failure modes).\n"
-        "- If the user demonstrates reasonable intuition, do not nitpick wording unnecessarily.\n"
-        "- Reject meta responses like 'okay' or 'sounds good' and prompt explanation.\n"
-        "- If the user names a broad field, force them to narrow it to one specific concept.\n"
-        "- If the user signals they want to stop, immediately stop questioning and allow evaluation.\n\n"
-
-        "Behave like a strict but fair examiner, not a discussion partner."
+        "Keep responses brief (1-2 sentences max). Be conversational and engaging."
     )
 }
 
 OPENING_PROMPT = {
     "role": "assistant",
-    "content": (
-        "Hello, and welcome.\n\n"
-        "We’ll be using the Feynman Technique for this exercise.\n\n"
-        "The goal is to focus on real understanding, not memorized definitions. "
-        "Explain ideas clearly and simply, as if you were teaching someone new to the topic.\n\n"
-        "Along the way, I may pause to ask for clarification, question assumptions, and point out gaps in reasoning. "
-        "If something is factually incorrect, I’ll correct it briefly so we can keep moving forward.\n\n"
-        "Choose ONE concept you feel comfortable with and begin explaining it."
-    )
+    "content": "Hello! Tell me a concept you'd like to explain."
 }
 
-EVALUATION_PROMPT = {
-    "role": "system",
-    "content": (
-        "You are now an evaluator.\n\n"
-        "Based on the entire conversation above, analyze the user's understanding.\n\n"
-        "Provide:\n"
-        "1. Specific concepts discussed\n"
-        "2. What the user demonstrated strong understanding of\n"
-        "3. Where the user's understanding was incomplete or unclear\n"
-        "4. Instances of vague-but-plausible language\n"
-        "5. Any misconceptions or missing key ideas\n"
-        "6. How stopping early affected the evaluation (if applicable)\n"
-        "7. Concrete recommendations for what to study or explain next\n\n"
-        "Be honest, precise, and constructive. Do not lecture."
-    )
-}
-
+history = []
+voice_session_active = False
+audio_buffer = []
+silence_counter = 0
 
 def start_session():
+    global history
     history = [SYSTEM_PROMPT, OPENING_PROMPT]
     return history
 
+def step(hist, user_input):
+    hist.append({"role": "user", "content": user_input})
 
-def step(history, user_input):
-    history.append({"role": "user", "content": user_input})
-
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=history
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=hist
     )
 
-    ai_response = response.output_text
-    history.append({"role": "assistant", "content": ai_response})
+    ai_response = response.choices[0].message.content
+    hist.append({"role": "assistant", "content": ai_response})
 
-    return ai_response, history
-
+    return ai_response, hist
 
 def should_stop(user_input):
+    """Check if user wants to stop the session"""
     return user_input.strip().upper() in STOP_WORDS
 
-
 def evaluate(history):
-    history.append(EVALUATION_PROMPT)
-
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=history
+    """Evaluate the session and provide feedback"""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert tutor evaluator. Analyze the conversation and provide constructive feedback on the student's understanding."},
+            {"role": "user", "content": f"Here's a tutoring session:\n\n{json.dumps(history)}\n\nPlease evaluate the student's understanding and provide feedback."}
+        ]
     )
+    return response.choices[0].message.content
 
-    return response.output_text
+def transcribe_audio(audio_data):
+    """Convert audio data to text using Whisper"""
+    try:
+        if not audio_data or len(audio_data) < 50:
+            return None
+            
+        audio_array = np.array(audio_data, dtype=np.float32)
+        int_data = np.int16(audio_array * 32767)
+        
+        wav_data = BytesIO()
+        sample_rate = 24000
+        with wave.open(wav_data, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(int_data.tobytes())
+        
+        wav_data.seek(0)
+        
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=("audio.wav", wav_data, "audio/wav")
+        )
+        
+        text = transcript.text.strip()
+        return text if text else None
+    except Exception as e:
+        print(f"Error transcribing: {e}", file=sys.stderr)
+        sys.stderr.flush()
+        return None
 
+def text_to_speech(text):
+    """Convert text to speech using OpenAI TTS"""
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text,
+            response_format="pcm"
+        )
+        
+        audio_bytes = response.content
+        audio_array = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        
+        return audio_array.tolist()
+    except Exception as e:
+        print(f"Error in TTS: {e}", file=sys.stderr)
+        sys.stderr.flush()
+        return None
 
-# Electron adapter (stdin/stdout loop)
+def detect_speech_activity(audio_data):
+    """Detect if there's speech in audio chunk"""
+    if not audio_data:
+        return False
+    
+    audio_array = np.array(audio_data, dtype=np.float32)
+    rms = np.sqrt(np.mean(audio_array ** 2))
+    
+    return rms > 0.01
 
-if __name__ == "__main__":
-    history = start_session()
-
-    # Send opening message immediately
-    print(history[-1]["content"])
+def main():
+    global voice_session_active, audio_buffer, history, silence_counter
+    
+    start_session()
+    opening = history[-1]["content"]
+    print(json.dumps({"type": "text", "content": opening}))
     sys.stdout.flush()
 
-    for line in sys.stdin:
-        user_input = line.strip()
+    while True:
+        try:
+            line = sys.stdin.readline().strip()
+            if not line:
+                continue
 
-        if not user_input:
+            message = json.loads(line)
+            msg_type = message.get("type")
+
+            if msg_type == "text":
+                content = message.get("content", "")
+                if content:
+                    reply = step(content)
+                    print(json.dumps({"type": "text", "content": reply}))
+                    sys.stdout.flush()
+
+            elif msg_type == "voice_start":
+                voice_session_active = True
+                audio_buffer = []
+                silence_counter = 0
+                
+                # Send opening greeting via speech
+                audio_response = text_to_speech(opening)
+                if audio_response:
+                    print(f"AUDIO:{json.dumps(audio_response)}")
+                    sys.stdout.flush()
+                
+                print(json.dumps({"type": "text", "content": "Listening..."}))
+                sys.stdout.flush()
+
+            elif msg_type == "voice_stop":
+                voice_session_active = False
+                audio_buffer = []
+                silence_counter = 0
+                print(json.dumps({"type": "text", "content": "Voice session ended"}))
+                sys.stdout.flush()
+
+            elif msg_type == "audio" and voice_session_active:
+                audio_data = message.get("data", [])
+                if audio_data:
+                    has_speech = detect_speech_activity(audio_data)
+                    audio_buffer.extend(audio_data)
+                    
+                    # Count silence frames
+                    if not has_speech:
+                        silence_counter += 1
+                    else:
+                        silence_counter = 0
+                    
+                    # Process audio when we have enough accumulated
+                    # OR when user has been silent after speaking
+                    should_process = False
+                    
+                    if len(audio_buffer) > 6000 and silence_counter > 10:
+                        # Has audio AND has been silent for ~0.5 seconds
+                        should_process = True
+                    
+                    if should_process:
+                        transcribed = transcribe_audio(audio_buffer)
+                        
+                        if transcribed and len(transcribed) > 2:
+                            print(json.dumps({"type": "text", "content": f"You: {transcribed}"}))
+                            sys.stdout.flush()
+                            
+                            # Get AI response
+                            reply = step(transcribed)
+                            
+                            print(json.dumps({"type": "text", "content": f"AI: {reply}"}))
+                            sys.stdout.flush()
+                            
+                            # Convert to speech
+                            audio_response = text_to_speech(reply)
+                            
+                            if audio_response:
+                                print(f"AUDIO:{json.dumps(audio_response)}")
+                                sys.stdout.flush()
+                        
+                        audio_buffer = []
+                        silence_counter = 0
+
+        except json.JSONDecodeError:
             continue
-
-        if should_stop(user_input):
-            evaluation = evaluate(history)
-            print(evaluation)
-            sys.stdout.flush()
+        except KeyboardInterrupt:
             break
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.stderr.flush()
 
-        reply, history = step(history, user_input)
-        print(reply)
-        sys.stdout.flush()
+if __name__ == "__main__":
+    main()
